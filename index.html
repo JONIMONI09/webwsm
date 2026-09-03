@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Floating Sandbox - Titan V26</title>
+    <style>
+        /* --- STRIKTE UI DOKTRIN & MOBILE FIRST --- */
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background: #020617; /* Fallback */
+            background: linear-gradient(180deg, #020617 0%, #0f172a 100%);
+            font-family: system-ui, -apple-system, sans-serif;
+            overflow: hidden; color: #f8fafc;
+            touch-action: none; user-select: none; -webkit-user-select: none;
+        }
+
+        canvas {
+            display: block; width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0; z-index: 1;
+            image-rendering: pixelated; 
+        }
+
+        #ui-layer {
+            position: absolute; top: env(safe-area-inset-top, 10px); left: 10px; right: 10px;
+            z-index: 100; pointer-events: none; 
+            display: flex; flex-direction: column; gap: 8px;
+        }
+
+        .panel {
+            background: rgba(15, 23, 42, 0.85); border: 2px solid #0ea5e9;
+            border-radius: 12px; padding: 10px 12px; backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5); pointer-events: auto;
+            max-width: 600px;
+        }
+
+        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;}
+        h1 { margin: 0; font-size: 1.1rem; color: #38bdf8; text-transform: uppercase; }
+        .status { font-size: 0.8rem; font-weight: bold; padding: 4px 6px; border-radius: 6px; }
+        .status-ok { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+        .status-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+
+        .btn-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+
+        button {
+            background: linear-gradient(135deg, #1e293b, #334155); border: 1px solid #475569; 
+            color: white; padding: 8px 6px; font-weight: bold; border-radius: 8px; font-size: 0.75rem;
+            cursor: pointer; transition: 0.1s; flex: 1 1 auto; min-width: 60px;
+        }
+        button:active { transform: scale(0.95); background: #0f172a; }
+        
+        .tool-active { background: linear-gradient(135deg, #0284c7, #0369a1); border-color: #38bdf8; box-shadow: 0 0 10px rgba(56,189,248,0.5); }
+        
+        .log-box { font-family: monospace; font-size: 0.7rem; color: #94a3b8; margin-top: 5px; display: flex; justify-content: space-between; }
+        .watchdog-active { color: #facc15; font-weight: bold; }
+        .error-log { color: #ef4444; font-weight: bold; font-size: 0.8rem; display: none; margin-top: 10px; border: 1px solid #ef4444; padding: 5px; background: rgba(239, 68, 68, 0.1); border-radius: 6px;}
+
+        /* --- UI SLIDER STYLES --- */
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #ef4444; cursor: pointer; margin-top: -8px; box-shadow: 0 0 10px rgba(239,68,68,0.8); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #475569; border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div class="panel">
+            <div class="header-row">
+                <h1>🚢 Titan Engine v26</h1>
+                <span class="status status-ok" id="ship-status">BOOTING...</span>
+            </div>
+            
+            <div id="error-display" class="error-log">Keine Fehler.</div>
+
+            <div class="btn-grid">
+                <button onclick="if(window.buildShip) window.buildShip()">🔄 Neu</button>
+                <button id="btn-view" onclick="if(window.toggleView) window.toggleView()">👁️ Ansicht: Voxel</button>
+            </div>
+            
+            <div class="btn-grid" style="margin-top: 6px;">
+                <button id="tool-grab" class="tool-active" style="border-color: #f59e0b; color: #fcd34d;" onclick="if(window.setTool) window.setTool('grab')">🖐️ Greifen</button>
+                <button id="tool-laser" style="border-color: #38bdf8; color: #bae6fd;" onclick="if(window.setTool) window.setTool('laser')">✂️ Laser</button>
+                <button id="tool-bomb" style="border-color: #ef4444; color: #fca5a5;" onclick="if(window.setTool) window.setTool('bomb')">💣 Bombe</button>
+                <button id="tool-door" style="border-color: #10b981; color: #a7f3d0;" onclick="if(window.setTool) window.setTool('door')">🚪 Schott</button>
+                <button id="tool-pump" style="border-color: #06b6d4; color: #a5f3fc;" onclick="if(window.setTool) window.setTool('pump')">🚰 Pumpe</button>
+                <button id="tool-repair" style="border-color: #8b5cf6; color: #ddd6fe;" onclick="if(window.setTool) window.setTool('repair')">🔧 Reparatur</button>
+            </div>
+
+            <div id="bomb-settings" style="display: none; margin-top: 8px; flex-direction: column; gap: 6px; background: rgba(239,68,68,0.1); padding: 8px; border-radius: 8px; border: 1px solid rgba(239,68,68,0.3);">
+                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #fca5a5; font-weight: bold;">
+                    <span>💣 Sprengkraft</span>
+                    <span id="bomb-val-display">Mittel (80)</span>
+                </div>
+                <input type="range" id="bombSize" min="10" max="300" value="80" oninput="document.getElementById('bomb-val-display').innerText = this.value < 40 ? 'Micro ('+this.value+')' : this.value < 80 ? 'Leicht ('+this.value+')' : this.value < 140 ? 'Mittel ('+this.value+')' : this.value < 220 ? 'Schwer ('+this.value+')' : 'Nuke ('+this.value+')'">
+            </div>
+            
+            <div class="log-box">
+                <span id="system-log">Sys: V26 Resilience + Deadzone Fix.</span>
+                <span id="watchdog-log" style="color: #4ade80;">FPS: -- | WD: OK</span>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        "use strict";
+
+        // GLOBAL ERROR HANDLER
+        window.addEventListener('error', function(e) {
+            let errBox = document.getElementById('error-display');
+            if(errBox) {
+                errBox.style.display = 'block';
+                errBox.innerText = '🔥 CRASH: ' + e.message + ' (Zeile ' + e.lineno + ')';
+            }
+        });
+
+        // Warten bis HTML 100% geladen ist!
+        window.addEventListener('DOMContentLoaded', () => {
+            
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d', { alpha: false }); 
+            let width, height, baseWaterLevel;
+
+            let viewMode = 'voxel'; 
+
+            window.toggleView = function() {
+                viewMode = (viewMode === 'voxel') ? 'grid' : 'voxel';
+                document.getElementById('btn-view').innerText = `👁️ Ansicht: ${viewMode === 'voxel' ? 'Voxel' : 'Gitter'}`;
+            };
+
+            // --- MEMORY ALLOCATION ---
+            const MEMORY_SIZE = 1000000; 
+            const HEAP = new Float32Array(MEMORY_SIZE);
+
+            const P_STRIDE = 11;
+            const POINTS_OFFSET = 0;
+            const P_X = 0, P_Y = 1, P_OX = 2, P_OY = 3, P_MASS = 4, P_WTR = 5, P_BUOY = 6, P_HULL = 7, P_LEAK = 8, P_PUMP = 9, P_GRABBED = 10;
+
+            const S_STRIDE = 11;
+            const MAX_POINTS = 7000;
+            const SPRINGS_OFFSET = MAX_POINTS * P_STRIDE;
+            const S_P1 = 0, S_P2 = 1, S_LEN = 2, S_BRK = 3, S_DOOR = 4, S_TENS = 5, S_DIAG = 6, S_BRK_THRESH = 7, S_FATIGUE = 8, S_ODX = 9, S_ODY = 10;
+
+            let numPoints = 0;
+            let numSprings = 0;
+            let totalInitialSprings = 0;
+            let visualSparks = [];
+
+            const GRAVITY = 0.18;
+            const WATER_DRAG = 0.88;
+            const AIR_DRAG = 0.995;
+            const ITERATIONS = 15; 
+            const CRUSH_THRESHOLD = 0.25; 
+            const SPACING = 14; 
+
+            const MAT_HULL_MASS = 1.8;   
+            const MAT_HULL_BUOY = 0.1;   
+            const MAT_CABIN_MASS = 0.3;  
+            const MAT_CABIN_BUOY = 2.5;  
+            const WATER_MASS_MULTI = 1.8; 
+
+            let waveTime = 0;
+            let currentTool = 'grab'; 
+            let pointer = { x: 0, y: 0, isDown: false, oldX: 0, oldY: 0 };
+            let grabbedNodes = []; 
+            let interactedPumps = new Set(); 
+            
+            let repairRadius = 30;
+            let repairPower = 0.02;
+
+            let lastFrameTime = performance.now();
+            let frameCount = 0;
+            let currentFPS = 60;
+
+            function resize() {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+                baseWaterLevel = height * 0.45; 
+            }
+            window.addEventListener('resize', resize);
+            resize();
+
+            window.setTool = function(tool) {
+                currentTool = tool;
+                ['laser', 'bomb', 'door', 'grab', 'pump', 'repair'].forEach(t => {
+                    let btn = document.getElementById('tool-' + t);
+                    if (btn) btn.classList.toggle('tool-active', tool === t);
+                });
+                let bombSet = document.getElementById('bomb-settings');
+                if (bombSet) bombSet.style.display = (tool === 'bomb') ? 'flex' : 'none';
+            };
+
+            function createPoint(x, y, materialType) {
+                if (numPoints >= MAX_POINTS) return -1;
+                let ptr = POINTS_OFFSET + (numPoints * P_STRIDE);
+                HEAP[ptr + P_X] = x; HEAP[ptr + P_Y] = y;
+                HEAP[ptr + P_OX] = x; HEAP[ptr + P_OY] = y;
+                let isHull = (materialType === 1 || materialType === 2);
+                HEAP[ptr + P_MASS] = isHull ? MAT_HULL_MASS : MAT_CABIN_MASS;
+                HEAP[ptr + P_BUOY] = isHull ? MAT_HULL_BUOY : MAT_CABIN_BUOY;
+                HEAP[ptr + P_WTR] = 0.0; HEAP[ptr + P_HULL] = materialType; 
+                HEAP[ptr + P_LEAK] = 0.0; HEAP[ptr + P_PUMP] = 0.0; HEAP[ptr + P_GRABBED] = 0.0; 
+                return numPoints++;
+            }
+
+            function createSpring(p1, p2, isDiag) {
+                if (p1 < 0 || p2 < 0 || p1 >= numPoints || p2 >= numPoints) return;
+                if (numSprings >= (MEMORY_SIZE - SPRINGS_OFFSET) / S_STRIDE) return;
+                let ptr = SPRINGS_OFFSET + (numSprings * S_STRIDE);
+                let p1_ptr = POINTS_OFFSET + p1 * P_STRIDE;
+                let p2_ptr = POINTS_OFFSET + p2 * P_STRIDE;
+                
+                let dx = HEAP[p2_ptr + P_X] - HEAP[p1_ptr + P_X];
+                let dy = HEAP[p2_ptr + P_Y] - HEAP[p1_ptr + P_Y];
+                
+                HEAP[ptr + S_P1] = p1; HEAP[ptr + S_P2] = p2;
+                HEAP[ptr + S_LEN] = Math.sqrt(dx*dx + dy*dy); 
+                HEAP[ptr + S_BRK] = 0.0; HEAP[ptr + S_DOOR] = 0.0; HEAP[ptr + S_TENS] = 0.0; 
+                HEAP[ptr + S_DIAG] = isDiag ? 1.0 : 0.0; HEAP[ptr + S_FATIGUE] = 0.0;   
+                HEAP[ptr + S_ODX] = dx; HEAP[ptr + S_ODY] = dy;
+                
+                let integrity = (HEAP[p1_ptr + P_MASS] + HEAP[p2_ptr + P_MASS]) / 2.0; 
+                HEAP[ptr + S_BRK_THRESH] = 1.15 + (integrity * 0.10) + (Math.random() * 0.03); 
+                numSprings++;
+            }
+
+            function breakSpring(ptr) {
+                if (HEAP[ptr + S_BRK] > 0.5) return;
+                HEAP[ptr + S_BRK] = 1.0; 
+                let p1_ptr = POINTS_OFFSET + HEAP[ptr + S_P1] * P_STRIDE;
+                let p2_ptr = POINTS_OFFSET + HEAP[ptr + S_P2] * P_STRIDE;
+                HEAP[p1_ptr + P_LEAK] = 1.0; HEAP[p2_ptr + P_LEAK] = 1.0;
+
+                let mx = (HEAP[p1_ptr + P_X] + HEAP[p2_ptr + P_X]) / 2;
+                let my = (HEAP[p1_ptr + P_Y] + HEAP[p2_ptr + P_Y]) / 2;
+                for(let i=0; i<5; i++) {
+                    visualSparks.push({
+                        x: mx + (Math.random()-0.5)*10, y: my + (Math.random()-0.5)*10,
+                        vx: (Math.random()-0.5) * 10, vy: (Math.random()-0.5) * 10, life: 1.0
+                    });
+                }
+            }
+
+            window.buildShip = function() {
+                numPoints = 0; numSprings = 0; visualSparks = []; grabbedNodes = [];
+                const cols = 65; const rows = 14; 
+                const startX = width / 2 - (cols * SPACING) / 2;
+                const startY = baseWaterLevel - (rows * SPACING) - 30;
+
+                let grid = []; 
+                for (let y = 0; y < rows; y++) {
+                    grid[y] = [];
+                    for (let x = 0; x < cols; x++) {
+                        if (y > 9 && (x < y - 9 || x > cols - 1 - (y - 9))) continue; 
+                        if (y < 4 && (x < 15 || x > 50)) continue; 
+                        let matType = 0; 
+                        if (y >= rows - 4) matType = 1; 
+                        if (y >= rows - 2) matType = 2; 
+                        
+                        let id = createPoint(startX + x*SPACING, startY + y*SPACING, matType);
+                        grid[y][x] = id;
+                        if (y === rows - 3 && (x === 12 || x === cols - 12)) {
+                            HEAP[POINTS_OFFSET + id * P_STRIDE + P_PUMP] = 1.0;
+                        }
+                    }
+                }
+
+                for (let y = 0; y < rows; y++) {
+                    for (let x = 0; x < cols; x++) {
+                        let id = grid[y][x]; if (id === undefined || id === -1) continue;
+                        if (x < cols - 1 && grid[y][x+1] !== undefined) createSpring(id, grid[y][x+1], false);
+                        if (y < rows - 1 && grid[y+1][x] !== undefined) createSpring(id, grid[y+1][x], false);
+                        if (x < cols - 1 && y < rows - 1 && grid[y+1][x+1] !== undefined) createSpring(id, grid[y+1][x+1], true);
+                        if (x > 0 && y < rows - 1 && grid[y+1][x-1] !== undefined) createSpring(id, grid[y+1][x-1], true);
+                    }
+                }
+                totalInitialSprings = numSprings;
+                document.getElementById('ship-status').innerText = 'Intakt: 100%';
+            };
+
+            function updatePhysics() {
+                waveTime += 0.05;
+                let activeSprings = 0;
+                let activeFatigueCount = 0;
+
+                if (pointer.isDown) {
+                    if (currentTool === 'grab' && grabbedNodes.length > 0) {
+                        for (let g of grabbedNodes) {
+                            let p = POINTS_OFFSET + g.id * P_STRIDE;
+                            HEAP[p + P_X] += (pointer.x + g.ox - HEAP[p + P_X]) * 0.2; 
+                            HEAP[p + P_Y] += (pointer.y + g.oy - HEAP[p + P_Y]) * 0.2;
+                            HEAP[p + P_OX] = HEAP[p + P_X]; HEAP[p + P_OY] = HEAP[p + P_Y];
+                        }
+                    }
+                    else if (currentTool === 'repair') {
+                        repairRadius = Math.min(500, repairRadius + 2.5);
+                        repairPower = Math.min(0.20, repairPower + 0.002);
+                        
+                        for (let i = 0; i < numPoints; i++) {
+                            let p = POINTS_OFFSET + i * P_STRIDE;
+                            let dx = HEAP[p+P_X] - pointer.x; let dy = HEAP[p+P_Y] - pointer.y;
+                            if (Math.sqrt(dx*dx + dy*dy) < repairRadius) {
+                                HEAP[p + P_LEAK] = 0.0; HEAP[p + P_WTR] *= 0.5; 
+                            }
+                        }
+
+                        for (let i = 0; i < numSprings; i++) {
+                            let s = SPRINGS_OFFSET + i * S_STRIDE;
+                            if (HEAP[s + S_BRK] < 0.5) continue; 
+
+                            let p1 = POINTS_OFFSET + HEAP[s+S_P1] * P_STRIDE;
+                            let p2 = POINTS_OFFSET + HEAP[s+S_P2] * P_STRIDE;
+
+                            let dx1 = HEAP[p1+P_X] - pointer.x; let dy1 = HEAP[p1+P_Y] - pointer.y;
+                            let dx2 = HEAP[p2+P_X] - pointer.x; let dy2 = HEAP[p2+P_Y] - pointer.y;
+                            let in1 = Math.sqrt(dx1*dx1 + dy1*dy1) < repairRadius;
+                            let in2 = Math.sqrt(dx2*dx2 + dy2*dy2) < repairRadius;
+
+                            let odx = HEAP[s + S_ODX]; let ody = HEAP[s + S_ODY];
+
+                            if (in1 || in2) {
+                                let dx = HEAP[p2+P_X] - HEAP[p1+P_X];
+                                let dy = HEAP[p2+P_Y] - HEAP[p1+P_Y];
+                                let dist = Math.sqrt(dx*dx + dy*dy);
+                                let rest = HEAP[s + S_LEN];
+
+                                if (dist > rest * 1.5) {
+                                    if (in1 && !in2) {
+                                        let tx = HEAP[p1+P_X] + odx; let ty = HEAP[p1+P_Y] + ody;
+                                        HEAP[p2+P_X] += (tx - HEAP[p2+P_X]) * repairPower;
+                                        HEAP[p2+P_Y] += (ty - HEAP[p2+P_Y]) * repairPower;
+                                        HEAP[p2+P_OX] = HEAP[p2+P_X]; HEAP[p2+P_OY] = HEAP[p2+P_Y];
+                                    } else if (!in1 && in2) {
+                                        let tx = HEAP[p2+P_X] - odx; let ty = HEAP[p2+P_Y] - ody;
+                                        HEAP[p1+P_X] += (tx - HEAP[p1+P_X]) * repairPower;
+                                        HEAP[p1+P_Y] += (ty - HEAP[p1+P_Y]) * repairPower;
+                                        HEAP[p1+P_OX] = HEAP[p1+P_X]; HEAP[p1+P_OY] = HEAP[p1+P_Y];
+                                    } else {
+                                        // Der Deadzone FIX: Beide Teile werden aufeinander zugezogen!
+                                        let tx2 = HEAP[p1+P_X] + odx; let ty2 = HEAP[p1+P_Y] + ody;
+                                        HEAP[p2+P_X] += (tx2 - HEAP[p2+P_X]) * (repairPower * 0.5);
+                                        HEAP[p2+P_Y] += (ty2 - HEAP[p2+P_Y]) * (repairPower * 0.5);
+                                        HEAP[p2+P_OX] = HEAP[p2+P_X]; HEAP[p2+P_OY] = HEAP[p2+P_Y];
+                                        
+                                        let tx1 = HEAP[p2+P_X] - odx; let ty1 = HEAP[p2+P_Y] - ody;
+                                        HEAP[p1+P_X] += (tx1 - HEAP[p1+P_X]) * (repairPower * 0.5);
+                                        HEAP[p1+P_Y] += (ty1 - HEAP[p1+P_Y]) * (repairPower * 0.5);
+                                        HEAP[p1+P_OX] = HEAP[p1+P_X]; HEAP[p1+P_OY] = HEAP[p1+P_Y];
+                                    }
+                                } else {
+                                    HEAP[s + S_BRK] = 0.0; HEAP[s + S_FATIGUE] = 0.0;
+                                    HEAP[p1 + P_LEAK] = 0.0; HEAP[p2 + P_LEAK] = 0.0;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    repairRadius = 30; repairPower = 0.02;
+                }
+
+                for (let i = 0; i < numPoints; i++) {
+                    let p = POINTS_OFFSET + i * P_STRIDE;
+                    if (HEAP[p + P_GRABBED] > 0.5) continue; 
+
+                    let vx = HEAP[p + P_X] - HEAP[p + P_OX]; let vy = HEAP[p + P_Y] - HEAP[p + P_OY];
+                    HEAP[p + P_OX] = HEAP[p + P_X]; HEAP[p + P_OY] = HEAP[p + P_Y];
+
+                    let wl = baseWaterLevel + Math.sin(HEAP[p + P_X] * 0.012 + waveTime) * 6;
+                    let isUw = HEAP[p + P_Y] > wl;
+                    let depth = Math.max(0, HEAP[p + P_Y] - wl);
+
+                    if (HEAP[p + P_PUMP] > 0.5 && HEAP[p + P_WTR] > 0) HEAP[p + P_WTR] = Math.max(0, HEAP[p + P_WTR] - 0.25); 
+
+                    if (HEAP[p + P_LEAK] > 0.5) {
+                        let wHead = HEAP[p + P_WTR];
+                        if (isUw) {
+                            if (depth > wHead) HEAP[p + P_WTR] += Math.sqrt((depth - wHead) * GRAVITY) * 0.35;
+                        } else if (wHead > 0) {
+                            HEAP[p + P_WTR] = Math.max(0, HEAP[p + P_WTR] - Math.sqrt(wHead * GRAVITY) * 0.20);
+                        }
+                    }
+
+                    let physicalVolume = Math.min(1.0, HEAP[p + P_WTR] / SPACING); 
+                    let currentMass = HEAP[p + P_MASS] + (physicalVolume * WATER_MASS_MULTI);
+                    vy += GRAVITY * currentMass;
+
+                    if (isUw) {
+                        vx *= WATER_DRAG; vy *= WATER_DRAG;
+                        let remainingAir = 1.0 - physicalVolume;
+                        // FIX: Abgerissene Teile verlieren die Luft und sinken!
+                        if (HEAP[p + P_LEAK] > 0.5) remainingAir *= 0.1;
+                        if (remainingAir > 0.01) vy -= Math.min((HEAP[p + P_BUOY] * remainingAir) + (depth * 0.005 * remainingAir), 1.8);
+                    } else {
+                        vx *= AIR_DRAG; vy *= AIR_DRAG;
+                    }
+
+                    HEAP[p + P_X] += vx; HEAP[p + P_Y] += vy;
+                    
+                    let floor = height + 800;
+                    if (HEAP[p + P_Y] > floor) {
+                        HEAP[p + P_Y] = floor; 
+                        HEAP[p + P_OY] = HEAP[p + P_Y] + vy * 0.05; 
+                        HEAP[p + P_OX] = HEAP[p + P_X] - vx * 0.6;
+                    }
+                }
+
+                for (let iter = 0; iter < ITERATIONS; iter++) {
+                    for (let i = 0; i < numSprings; i++) {
+                        let s = SPRINGS_OFFSET + i * S_STRIDE;
+                        if (HEAP[s + S_BRK] > 0.5) continue;
+                        if (iter === 0) activeSprings++;
+
+                        let p1 = POINTS_OFFSET + HEAP[s + S_P1] * P_STRIDE;
+                        let p2 = POINTS_OFFSET + HEAP[s + S_P2] * P_STRIDE;
+
+                        if (iter === 0 && HEAP[s + S_DOOR] < 0.5) { 
+                            let w1 = HEAP[p1 + P_WTR]; let w2 = HEAP[p2 + P_WTR];
+                            let y1 = HEAP[p1 + P_Y];   let y2 = HEAP[p2 + P_Y];
+                            let diffFlow = (w1 - y1 - (w2 - y2)) * 0.15; 
+                            if (y1 < y2 - 5 && w1 > 0.01) diffFlow += 0.08; 
+                            if (y2 < y1 - 5 && w2 > 0.01) diffFlow -= 0.08;
+                            
+                            if (diffFlow > 0) {
+                                let maxFlow = Math.min(diffFlow, w1);
+                                HEAP[p1 + P_WTR] -= maxFlow; HEAP[p2 + P_WTR] += maxFlow;
+                            } else if (diffFlow < 0) {
+                                let maxFlow = Math.min(-diffFlow, w2);
+                                HEAP[p1 + P_WTR] += maxFlow; HEAP[p2 + P_WTR] -= maxFlow;
+                            }
+                        }
+
+                        let dx = HEAP[p2 + P_X] - HEAP[p1 + P_X]; let dy = HEAP[p2 + P_Y] - HEAP[p1 + P_Y];
+                        let distSq = dx*dx + dy*dy;
+                        if (distSq === 0) continue;
+                        let dist = Math.sqrt(distSq);
+
+                        let rest = HEAP[s + S_LEN]; let breakPoint = HEAP[s + S_BRK_THRESH]; 
+                        let stretch = dist / rest;
+                        
+                        let yieldPoint = breakPoint * 0.97; 
+                        if (stretch > yieldPoint) {
+                            HEAP[s + S_FATIGUE] += (stretch - yieldPoint) * 0.8; 
+                            if (iter === 0) activeFatigueCount++; 
+                        } else {
+                            if (HEAP[s + S_FATIGUE] > 0.0) HEAP[s + S_FATIGUE] = Math.max(0.0, HEAP[s + S_FATIGUE] - 0.05);
+                        }
+                        
+                        if (stretch > breakPoint || dist < rest * CRUSH_THRESHOLD || HEAP[s + S_FATIGUE] > 1.0) { 
+                            breakSpring(s); continue; 
+                        }
+
+                        HEAP[s + S_TENS] = Math.min(1.0, Math.abs(rest - dist) / (rest * (breakPoint - 1)));
+                        let correction = (rest - dist) / dist * 0.5;
+                        HEAP[p1 + P_X] -= dx * correction; HEAP[p1 + P_Y] -= dy * correction;
+                        HEAP[p2 + P_X] += dx * correction; HEAP[p2 + P_Y] += dy * correction;
+                    }
+                }
+
+                let wdEl = document.getElementById('watchdog-log');
+                if (activeFatigueCount > 0) {
+                    wdEl.innerText = `FPS: ${currentFPS} | WD: ${activeFatigueCount} RISSE!`;
+                    wdEl.className = 'watchdog-active';
+                } else {
+                    wdEl.innerText = `FPS: ${currentFPS} | WD: OK`;
+                    wdEl.className = '';
+                }
+
+                return activeSprings;
+            }
+
+            function handleInputDown(e) {
+                pointer.isDown = true;
+                pointer.x = e.touches ? e.touches[0].clientX : e.clientX;
+                pointer.y = e.touches ? e.touches[0].clientY : e.clientY;
+                pointer.oldX = pointer.x; pointer.oldY = pointer.y;
+                interactedPumps.clear(); 
+
+                if (currentTool === 'grab') {
+                    grabbedNodes = [];
+                    for (let i = 0; i < numPoints; i++) {
+                        let p = POINTS_OFFSET + i * P_STRIDE;
+                        let dx = HEAP[p+P_X] - pointer.x; let dy = HEAP[p+P_Y] - pointer.y;
+                        if (Math.sqrt(dx*dx + dy*dy) < 120) { 
+                            HEAP[p + P_GRABBED] = 1.0; 
+                            grabbedNodes.push({ id: i, ox: HEAP[p+P_X] - pointer.x, oy: HEAP[p+P_Y] - pointer.y });
+                        }
+                    }
+                } else if (currentTool === 'bomb') {
+                    let bombSlider = document.getElementById('bombSize');
+                    const radius = bombSlider ? parseFloat(bombSlider.value) : 80;
+                    const forceMultiplier = radius * 0.625; 
+                    
+                    for (let i = 0; i < numSprings; i++) {
+                        let s = SPRINGS_OFFSET + i * S_STRIDE;
+                        if (HEAP[s + S_BRK] > 0.5) continue;
+                        let mx = (HEAP[POINTS_OFFSET + HEAP[s+S_P1]*P_STRIDE + P_X] + HEAP[POINTS_OFFSET + HEAP[s+S_P2]*P_STRIDE + P_X])/2;
+                        let my = (HEAP[POINTS_OFFSET + HEAP[s+S_P1]*P_STRIDE + P_Y] + HEAP[POINTS_OFFSET + HEAP[s+S_P2]*P_STRIDE + P_Y])/2;
+                        let dx = mx - pointer.x; let dy = my - pointer.y;
+                        if (Math.sqrt(dx*dx + dy*dy) < radius) breakSpring(s);
+                    }
+                    for (let i = 0; i < numPoints; i++) {
+                        let p = POINTS_OFFSET + i * P_STRIDE;
+                        let dx = HEAP[p+P_X] - pointer.x; let dy = HEAP[p+P_Y] - pointer.y;
+                        let dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist < radius * 1.5) {
+                            HEAP[p+P_X] += (dx/(dist||1)) * forceMultiplier;
+                            HEAP[p+P_Y] += (dy/(dist||1)) * forceMultiplier;
+                        }
+                    }
+                    ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.fillRect(0,0,width,height);
+                } else {
+                    handleInputMove(e);
+                }
+            }
+
+            function handleInputMove(e) {
+                if (!pointer.isDown) return;
+                pointer.oldX = pointer.x; pointer.oldY = pointer.y;
+                pointer.x = e.touches ? e.touches[0].clientX : e.clientX;
+                pointer.y = e.touches ? e.touches[0].clientY : e.clientY;
+
+                if (currentTool === 'laser' || currentTool === 'door') {
+                    for (let i = 0; i < numSprings; i++) {
+                        let s = SPRINGS_OFFSET + i * S_STRIDE;
+                        let p1 = POINTS_OFFSET + HEAP[s+S_P1] * P_STRIDE;
+                        let p2 = POINTS_OFFSET + HEAP[s+S_P2] * P_STRIDE;
+                        let mx = (HEAP[p1+P_X] + HEAP[p2+P_X])/2; let my = (HEAP[p1+P_Y] + HEAP[p2+P_Y])/2;
+                        
+                        let dx = mx - pointer.x; let dy = my - pointer.y;
+                        if (Math.sqrt(dx*dx + dy*dy) < 15) {
+                            if (currentTool === 'laser') breakSpring(s);
+                            else if (currentTool === 'door' && HEAP[s + S_DOOR] < 0.5) {
+                                HEAP[s + S_DOOR] = 1.0; 
+                                HEAP[p1 + P_MASS] += 0.25; HEAP[p2 + P_MASS] += 0.25;
+                                HEAP[s + S_BRK_THRESH] += 0.6; 
+                            } 
+                        }
+                    }
+                }
+                else if (currentTool === 'pump') {
+                    for (let i = 0; i < numPoints; i++) {
+                        let p = POINTS_OFFSET + i * P_STRIDE;
+                        let dx = HEAP[p+P_X] - pointer.x; let dy = HEAP[p+P_Y] - pointer.y;
+                        if (Math.sqrt(dx*dx + dy*dy) < 25) {
+                            if (!interactedPumps.has(i)) {
+                                HEAP[p + P_PUMP] = HEAP[p + P_PUMP] > 0.5 ? 0.0 : 1.0; 
+                                interactedPumps.add(i);
+                            }
+                        }
+                    }
+                }
+            }
+
+            function releaseInput() {
+                pointer.isDown = false;
+                repairRadius = 30; repairPower = 0.02;
+                if (currentTool === 'grab') {
+                    for (let g of grabbedNodes) HEAP[POINTS_OFFSET + g.id * P_STRIDE + P_GRABBED] = 0.0;
+                    grabbedNodes = [];
+                }
+            }
+
+            canvas.addEventListener('mousedown', handleInputDown); 
+            window.addEventListener('mouseup', releaseInput);
+            canvas.addEventListener('mousemove', handleInputMove); 
+            canvas.addEventListener('touchstart', handleInputDown, {passive: false});
+            window.addEventListener('touchend', releaseInput); 
+            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleInputMove(e); }, {passive: false});
+
+            function loop() {
+                let now = performance.now();
+                frameCount++;
+                if (now - lastFrameTime >= 500) {
+                    currentFPS = Math.round((frameCount * 1000) / (now - lastFrameTime));
+                    frameCount = 0; lastFrameTime = now;
+                }
+
+                let skyGradient = ctx.createLinearGradient(0, 0, 0, height);
+                skyGradient.addColorStop(0, '#020617'); skyGradient.addColorStop(1, '#0f172a');
+                ctx.fillStyle = skyGradient; ctx.fillRect(0, 0, width, height);
+
+                let activeSprings = updatePhysics();
+
+                let integrity = Math.max(0, Math.round((activeSprings / (totalInitialSprings||1)) * 100));
+                let statusEl = document.getElementById('ship-status');
+                
+                if (integrity < 30) { statusEl.innerText = "KRITISCHER SCHADEN!"; statusEl.className = "status status-danger"; }
+                else if (integrity < 80) { statusEl.innerText = `Struktur warnt: ${integrity}%`; statusEl.className = "status status-danger"; }
+                else { statusEl.innerText = `Intakt: ${integrity}%`; statusEl.className = "status status-ok"; }
+
+                ctx.fillStyle = "rgba(14, 165, 233, 0.2)"; ctx.fillRect(0, baseWaterLevel, width, height);
+                
+                if (viewMode === 'grid') {
+                    ctx.lineWidth = 2.0;
+                    ctx.beginPath();
+                    let pathNormal = new Path2D(); let pathDoor = new Path2D();
+
+                    for (let i = 0; i < numSprings; i++) {
+                        let s = SPRINGS_OFFSET + i * S_STRIDE;
+                        if (HEAP[s + S_BRK] > 0.5) continue;
+                        
+                        let p1 = POINTS_OFFSET + HEAP[s+S_P1] * P_STRIDE;
+                        let p2 = POINTS_OFFSET + HEAP[s+S_P2] * P_STRIDE;
+                        let x1 = HEAP[p1+P_X]; let y1 = HEAP[p1+P_Y];
+                        let x2 = HEAP[p2+P_X]; let y2 = HEAP[p2+P_Y];
+                        
+                        if (HEAP[s + S_DOOR] > 0.5) {
+                            pathDoor.moveTo(x1, y1); pathDoor.lineTo(x2, y2);
+                        } else if (HEAP[s + S_TENS] > 0.5 || HEAP[s + S_FATIGUE] > 0.1) {
+                            let redVal = Math.min(255, 100 + HEAP[s + S_FATIGUE] * 300);
+                            ctx.strokeStyle = `rgba(${redVal}, 68, 68, ${Math.max(HEAP[s + S_TENS], HEAP[s + S_FATIGUE])})`; 
+                            ctx.lineWidth = 3.0; 
+                            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+                        } else {
+                            if (HEAP[s + S_DIAG] > 0.5) {
+                                ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.lineWidth = 2.0;
+                                ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+                            } else {
+                                pathNormal.moveTo(x1, y1); pathNormal.lineTo(x2, y2);
+                            }
+                        }
+                    }
+                    ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.lineWidth = 2.0; ctx.stroke(pathNormal);
+                    ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 4.0; ctx.stroke(pathDoor);
+
+                    for (let i = 0; i < numPoints; i++) {
+                        let p = POINTS_OFFSET + i * P_STRIDE;
+                        let mat = HEAP[p + P_HULL];
+                        let r=241, g=245, b=249;
+                        if (mat === 1) { r=51; g=65; b=85; } else if (mat === 2) { r=153; g=27; b=27; }
+                        
+                        let wtr = Math.min(1.0, HEAP[p + P_WTR] / SPACING);
+                        r = Math.round(r*(1-wtr) + 2*wtr); g = Math.round(g*(1-wtr) + 132*wtr); b = Math.round(b*(1-wtr) + 199*wtr);
+
+                        ctx.beginPath(); ctx.arc(HEAP[p+P_X], HEAP[p+P_Y], 4.5, 0, 6.283);
+                        ctx.fillStyle = `rgb(${r},${g},${b})`; ctx.fill();
+                    }
+                } 
+                else {
+                    const VOXEL_SIZE = SPACING + 1.0; 
+                    for (let i = 0; i < numPoints; i++) {
+                        let p = POINTS_OFFSET + i * P_STRIDE;
+                        let mat = HEAP[p + P_HULL];
+                        let r=241, g=245, b=249;
+                        if (mat === 1) { r=51; g=65; b=85; } else if (mat === 2) { r=153; g=27; b=27; }
+                        let wtr = Math.min(1.0, HEAP[p + P_WTR] / SPACING); 
+                        r = Math.round(r*(1-wtr) + 2*wtr); g = Math.round(g*(1-wtr) + 132*wtr); b = Math.round(b*(1-wtr) + 199*wtr);
+                        
+                        ctx.fillStyle = `rgb(${r},${g},${b})`; 
+                        ctx.fillRect(HEAP[p+P_X] - VOXEL_SIZE/2, HEAP[p+P_Y] - VOXEL_SIZE/2, VOXEL_SIZE, VOXEL_SIZE);
+                    }
+
+                    ctx.lineWidth = 4.0; ctx.strokeStyle = "#ef4444";
+                    let pathDoor = new Path2D();
+                    for (let i = 0; i < numSprings; i++) {
+                        let s = SPRINGS_OFFSET + i * S_STRIDE;
+                        if (HEAP[s + S_BRK] > 0.5) continue;
+                        if (HEAP[s + S_DOOR] > 0.5) {
+                            let p1 = POINTS_OFFSET + HEAP[s+S_P1] * P_STRIDE;
+                            let p2 = POINTS_OFFSET + HEAP[s+S_P2] * P_STRIDE;
+                            pathDoor.moveTo(HEAP[p1+P_X], HEAP[p1+P_Y]); pathDoor.lineTo(HEAP[p2+P_X], HEAP[p2+P_Y]);
+                        }
+                    }
+                    ctx.stroke(pathDoor);
+                }
+
+                ctx.fillStyle = "rgba(14, 165, 233, 0.4)";
+                ctx.beginPath(); ctx.moveTo(0, height);
+                for(let x=0; x<=width; x+=40) ctx.lineTo(x, baseWaterLevel + Math.sin(x * 0.012 + waveTime) * 6);
+                ctx.lineTo(width, height); ctx.fill();
+
+                ctx.fillStyle = "#facc15";
+                for(let i=visualSparks.length-1; i>=0; i--) {
+                    let sp = visualSparks[i];
+                    sp.x += sp.vx; sp.y += sp.vy; sp.vy += 0.5; sp.life -= 0.03; 
+                    ctx.globalAlpha = Math.max(0, sp.life);
+                    ctx.fillRect(sp.x, sp.y, 3, 3);
+                    if(sp.life <= 0) visualSparks.splice(i, 1);
+                }
+                ctx.globalAlpha = 1.0;
+
+                if (pointer.isDown && currentTool === 'repair') {
+                    ctx.beginPath(); ctx.arc(pointer.x, pointer.y, repairRadius, 0, 6.283);
+                    ctx.fillStyle = "rgba(74, 222, 128, 0.15)"; ctx.fill();
+                    ctx.strokeStyle = "rgba(74, 222, 128, 0.8)"; ctx.lineWidth = 2; ctx.stroke();
+                }
+
+                for (let i = 0; i < numPoints; i++) {
+                    let p = POINTS_OFFSET + i * P_STRIDE;
+                    let wtr = Math.min(1.0, HEAP[p + P_WTR] / SPACING);
+                    
+                    if (HEAP[p + P_LEAK] > 0.5 && wtr < 0.9) {
+                        ctx.fillStyle = "rgba(249, 115, 22, 0.9)"; ctx.fillRect(HEAP[p+P_X]-3, HEAP[p+P_Y]-3, 6, 6);
+                    }
+                    if (HEAP[p + P_PUMP] > 0.5) {
+                        ctx.beginPath(); ctx.arc(HEAP[p+P_X], HEAP[p+P_Y], 10, 0, 6.283);
+                        ctx.fillStyle = "rgba(34, 211, 238, 0.2)"; ctx.fill();
+                        ctx.strokeStyle = "#22d3ee"; ctx.lineWidth = 2; ctx.stroke();
+                    }
+                }
+
+                if (pointer.isDown && (currentTool === 'laser' || currentTool === 'door')) {
+                    ctx.beginPath(); ctx.moveTo(pointer.oldX, pointer.oldY); ctx.lineTo(pointer.x, pointer.y); 
+                    ctx.strokeStyle = "#fef08a"; ctx.lineWidth = 3; ctx.stroke();
+                }
+
+                requestAnimationFrame(loop);
+            }
+
+            // Let the magic begin!
+            window.buildShip();
+            requestAnimationFrame(loop);
+        });
+    </script>
+</body>
+</html>
