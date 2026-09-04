@@ -21,6 +21,9 @@
   },
   "homepage": "https://github.com/JONIMONI09/webwsm#readme",
   "devDependencies": {
+    "@babel/core": "^8.0.1",
+    "@babel/preset-env": "^8.0.2",
+    "babel-jest": "^30.5.1",
     "jest": "^30.5.1",
     "vite": "^8.2.2"
   }
