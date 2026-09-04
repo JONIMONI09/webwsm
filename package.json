@@ -1,0 +1,27 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JONIMONI09/webwsm.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/JONIMONI09/webwsm/issues"
+  },
+  "homepage": "https://github.com/JONIMONI09/webwsm#readme",
+  "devDependencies": {
+    "jest": "^30.5.1",
+    "vite": "^8.2.2"
+  }
+}
