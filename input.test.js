@@ -150,4 +150,45 @@ globals.describe('updateRepairLogic', () => {
         globals.expect(ship.HEAP[p1 + P_X]).toBeGreaterThan(-5);
         globals.expect(ship.HEAP[p2 + P_X]).toBeLessThan(25);
     });
+    globals.it('pulls broken spring closer but does not repair instantly if stretched too far', () => {
+        const P_STRIDE = 11, S_STRIDE = 11;
+        const SPRINGS_OFFSET = ship.MAX_POINTS * P_STRIDE;
+        const P_X = 0, P_Y = 1, P_OX = 2, P_OY = 3, P_LEAK = 8;
+        const S_P1 = 0, S_P2 = 1, S_LEN = 2, S_BRK = 3, S_FATIGUE = 8;
+
+        input.pointer.x = 0;
+        input.pointer.y = 0;
+
+        const p1 = 0 * P_STRIDE;
+        ship.HEAP[p1 + P_X] = 0;
+        ship.HEAP[p1 + P_Y] = 0;
+
+        const p2 = 1 * P_STRIDE;
+        // set dist to exactly rest * 1.4
+        // (14 > 10 * 1.1) so it should just pull closer
+        ship.HEAP[p2 + P_X] = 14;
+        ship.HEAP[p2 + P_Y] = 0;
+
+        const s = SPRINGS_OFFSET + 0 * S_STRIDE;
+        ship.HEAP[s + S_P1] = 0;
+        ship.HEAP[s + S_P2] = 1;
+        ship.HEAP[s + S_BRK] = 1.0;
+        ship.HEAP[s + S_LEN] = 10;
+        ship.HEAP[s + S_FATIGUE] = 1.0;
+
+        ship.HEAP[p1 + P_LEAK] = 1.0;
+        ship.HEAP[p2 + P_LEAK] = 1.0;
+
+        input.updateRepairLogic();
+
+        // Spring is NOT repaired yet
+        globals.expect(ship.HEAP[s + S_BRK]).toBe(1.0);
+        globals.expect(ship.HEAP[s + S_FATIGUE]).toBe(1.0);
+        globals.expect(ship.HEAP[p1 + P_LEAK]).toBe(0.0); // leak repaired due to radius
+        globals.expect(ship.HEAP[p2 + P_LEAK]).toBe(0.0); // leak repaired due to radius
+
+        // the nodes should be pulled closer together
+        globals.expect(ship.HEAP[p2 + P_X]).toBeLessThan(14);
+        globals.expect(ship.HEAP[p1 + P_X]).toBeGreaterThan(0);
+    });
 });
