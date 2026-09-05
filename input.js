@@ -6,6 +6,7 @@ export let pointer = { x: 0, y: 0, isDown: false, oldX: 0, oldY: 0 };
 export let grabbedNodes = [];
 export let interactedPumps = new Set();
 export let repairRadius = 30;
+export let repairRadiusMax = 100; // Customizable max radius
 export let repairPower = 0.02;
 
 export function setupInput(tool) {
@@ -16,6 +17,8 @@ export function setupInput(tool) {
     });
     let bombSet = document.getElementById('bomb-settings');
     if (bombSet) bombSet.style.display = (tool === 'bomb') ? 'flex' : 'none';
+    let repSet = document.getElementById('repair-settings');
+    if (repSet) repSet.style.display = (tool === 'repair') ? 'flex' : 'none';
 }
 
 
@@ -129,7 +132,11 @@ export function releaseInput() {
 }
 
 export function updateRepairLogic() {
-    repairRadius = Math.min(500, repairRadius + 2.5);
+
+    let userMaxRadius = 100;
+    let radiusSlider = document.getElementById('repair-radius');
+    if (radiusSlider) userMaxRadius = parseFloat(radiusSlider.value) || 100;
+    repairRadius = Math.min(userMaxRadius, repairRadius + 2.5);
     repairPower = Math.min(0.20, repairPower + 0.002);
 
     for (let i = 0; i < numPoints; i++) {
