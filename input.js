@@ -132,9 +132,12 @@ export function releaseInput() {
 }
 
 export function updateRepairLogic() {
+
+    let userMaxRadius = 100;
     let radiusSlider = document.getElementById('repair-radius');
-    if (radiusSlider) repairRadius = parseFloat(radiusSlider.value) || 100;
-    else repairRadius = 100;
+    if (radiusSlider) userMaxRadius = parseFloat(radiusSlider.value) || 100;
+    repairRadius = Math.min(userMaxRadius, repairRadius + 2.5);
+    repairPower = Math.min(0.20, repairPower + 0.002);
 
     for (let i = 0; i < numPoints; i++) {
         let p = POINTS_OFFSET + i * P_STRIDE;
@@ -158,10 +161,38 @@ export function updateRepairLogic() {
         let in2 = Math.sqrt(dx2*dx2 + dy2*dy2) < repairRadius;
 
         if (in1 || in2) {
-            HEAP[s + S_BRK] = 0.0;
-            HEAP[s + S_FATIGUE] = -120.0; // 120 frames of break immunity while it snaps back
-            HEAP[p1 + P_LEAK] = 0.0;
-            HEAP[p2 + P_LEAK] = 0.0;
+            let dx = HEAP[p2+P_X] - HEAP[p1+P_X];
+            let dy = HEAP[p2+P_Y] - HEAP[p1+P_Y];
+            let dist = Math.sqrt(dx*dx + dy*dy);
+            let rest = HEAP[s + S_LEN];
+
+            if (Math.abs(dist - rest) > rest * 0.1) {
+                let moveDist = (dist - rest) / 2;
+                let safeDist = dist === 0 ? 0.0001 : dist;
+                let moveX = (dx / safeDist) * moveDist * repairPower;
+                let moveY = (dy / safeDist) * moveDist * repairPower;
+
+                if (in1 && !in2) {
+                    HEAP[p2+P_X] -= moveX * 2;
+                    HEAP[p2+P_Y] -= moveY * 2;
+                    HEAP[p2+P_OX] = HEAP[p2+P_X]; HEAP[p2+P_OY] = HEAP[p2+P_Y];
+                } else if (!in1 && in2) {
+                    HEAP[p1+P_X] += moveX * 2;
+                    HEAP[p1+P_Y] += moveY * 2;
+                    HEAP[p1+P_OX] = HEAP[p1+P_X]; HEAP[p1+P_OY] = HEAP[p1+P_Y];
+                } else {
+                    HEAP[p1+P_X] += moveX;
+                    HEAP[p1+P_Y] += moveY;
+                    HEAP[p1+P_OX] = HEAP[p1+P_X]; HEAP[p1+P_OY] = HEAP[p1+P_Y];
+
+                    HEAP[p2+P_X] -= moveX;
+                    HEAP[p2+P_Y] -= moveY;
+                    HEAP[p2+P_OX] = HEAP[p2+P_X]; HEAP[p2+P_OY] = HEAP[p2+P_Y];
+                }
+            } else {
+                HEAP[s + S_BRK] = 0.0; HEAP[s + S_FATIGUE] = 0.0;
+                HEAP[p1 + P_LEAK] = 0.0; HEAP[p2 + P_LEAK] = 0.0;
+            }
         }
     }
 }
