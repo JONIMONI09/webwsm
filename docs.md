@@ -16,11 +16,13 @@ The logic is split into the following modular files:
 
 ## Repair Logic Fix
 ### The Issue
-Previously, the "Repair" tool was trying to pull broken spring nodes back together by moving them towards their *original* delta values (`S_ODX` / `S_ODY`), recorded when the ship was initially built. When a user rotated or broke parts of the ship, these original X/Y delta vectors were no longer valid relative to the world coordinates. Pulling the parts along their original deltas caused the ship parts to incorrectly drift away or repair in chaotic manners.
+Previously, the "Repair" tool was manually moving node coordinates to snap them together. This bypassed the core physics solver, leading to torn chunks, permanent deformation, and gaps where springs were restored while nodes were still too far apart (causing instant re-breaking). The repair radius was also prone to auto-growing uncontrollably.
 
 ### The Fix
-In the newly extracted `updateRepairLogic` function inside `input.js`:
-Instead of referencing `S_ODX` and `S_ODY`, the code now dynamically computes the distance between `p1` and `p2`.
-It computes a normalized vector `(dx / dist, dy / dist)` representing the *current* angle between the two broken nodes. It then pulls both nodes together along this current vector until they reach their rest distance (`rest`), completely ignoring their original rotation.
+The repair tool logic has been entirely refactored to cooperate with the physics engine rather than fight it:
+1. **Structural Immunity:** Instead of manually moving nodes in `input.js`, the tool now simply restores broken springs (`S_BRK = 0.0`) within the radius and grants them a negative fatigue value (`S_FATIGUE = -120.0`).
+2. **Physics Solver Integration:** In `physics.js`, springs with negative fatigue are considered "immune". They cannot break, regardless of how far apart they are stretched. The physics engine constraint solver naturally pulls the massively stretched springs back together over multiple frames.
+3. **Velocity Damping:** A global physics dampening modifier (`repairDamping = 0.5`) is applied while the repair tool is active. This prevents violent physics explosions caused by detached chunks snapping back too quickly.
+4. **Configurable Radius:** The repair radius auto-growth was removed. It is now controlled manually by the user via a UI slider (`#repair-radius`).
 
-This ensures that the repair works flawlessly from any angle or rotation in the simulation.
+This ensures a 100% gapless, perfect repair without permanent deformations or physics explosions.

@@ -6,6 +6,7 @@ export let pointer = { x: 0, y: 0, isDown: false, oldX: 0, oldY: 0 };
 export let grabbedNodes = [];
 export let interactedPumps = new Set();
 export let repairRadius = 30;
+export let repairRadiusMax = 100; // Customizable max radius
 export let repairPower = 0.02;
 
 export function setupInput(tool) {
@@ -16,6 +17,8 @@ export function setupInput(tool) {
     });
     let bombSet = document.getElementById('bomb-settings');
     if (bombSet) bombSet.style.display = (tool === 'bomb') ? 'flex' : 'none';
+    let repSet = document.getElementById('repair-settings');
+    if (repSet) repSet.style.display = (tool === 'repair') ? 'flex' : 'none';
 }
 
 
@@ -129,8 +132,9 @@ export function releaseInput() {
 }
 
 export function updateRepairLogic() {
-    repairRadius = Math.min(500, repairRadius + 2.5);
-    repairPower = Math.min(0.20, repairPower + 0.002);
+    let radiusSlider = document.getElementById('repair-radius');
+    if (radiusSlider) repairRadius = parseFloat(radiusSlider.value) || 100;
+    else repairRadius = 100;
 
     for (let i = 0; i < numPoints; i++) {
         let p = POINTS_OFFSET + i * P_STRIDE;
@@ -149,41 +153,15 @@ export function updateRepairLogic() {
 
         let dx1 = HEAP[p1+P_X] - pointer.x; let dy1 = HEAP[p1+P_Y] - pointer.y;
         let dx2 = HEAP[p2+P_X] - pointer.x; let dy2 = HEAP[p2+P_Y] - pointer.y;
+
         let in1 = Math.sqrt(dx1*dx1 + dy1*dy1) < repairRadius;
         let in2 = Math.sqrt(dx2*dx2 + dy2*dy2) < repairRadius;
 
         if (in1 || in2) {
-            let dx = HEAP[p2+P_X] - HEAP[p1+P_X];
-            let dy = HEAP[p2+P_Y] - HEAP[p1+P_Y];
-            let dist = Math.sqrt(dx*dx + dy*dy);
-            let rest = HEAP[s + S_LEN];
-
-            if (dist > rest * 1.5) {
-                let moveDist = (dist - rest) / 2;
-                let moveX = (dx / dist) * moveDist * repairPower;
-                let moveY = (dy / dist) * moveDist * repairPower;
-
-                if (in1 && !in2) {
-                    HEAP[p2+P_X] -= moveX * 2;
-                    HEAP[p2+P_Y] -= moveY * 2;
-                    HEAP[p2+P_OX] = HEAP[p2+P_X]; HEAP[p2+P_OY] = HEAP[p2+P_Y];
-                } else if (!in1 && in2) {
-                    HEAP[p1+P_X] += moveX * 2;
-                    HEAP[p1+P_Y] += moveY * 2;
-                    HEAP[p1+P_OX] = HEAP[p1+P_X]; HEAP[p1+P_OY] = HEAP[p1+P_Y];
-                } else {
-                    HEAP[p1+P_X] += moveX;
-                    HEAP[p1+P_Y] += moveY;
-                    HEAP[p1+P_OX] = HEAP[p1+P_X]; HEAP[p1+P_OY] = HEAP[p1+P_Y];
-
-                    HEAP[p2+P_X] -= moveX;
-                    HEAP[p2+P_Y] -= moveY;
-                    HEAP[p2+P_OX] = HEAP[p2+P_X]; HEAP[p2+P_OY] = HEAP[p2+P_Y];
-                }
-            } else {
-                HEAP[s + S_BRK] = 0.0; HEAP[s + S_FATIGUE] = 0.0;
-                HEAP[p1 + P_LEAK] = 0.0; HEAP[p2 + P_LEAK] = 0.0;
-            }
+            HEAP[s + S_BRK] = 0.0;
+            HEAP[s + S_FATIGUE] = -120.0; // 120 frames of break immunity while it snaps back
+            HEAP[p1 + P_LEAK] = 0.0;
+            HEAP[p2 + P_LEAK] = 0.0;
         }
     }
 }

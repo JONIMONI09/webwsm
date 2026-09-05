@@ -1,5 +1,10 @@
 import { buildShip } from './ship.js';
 import { setupInput, releaseInput, handleInputDown, handleInputMove, currentTool, pointer, repairRadius, repairPower, interactedPumps, grabbedNodes } from './input.js';
+
+// Expose currentTool to window for physics damping logic to avoid circular import issues
+Object.defineProperty(window, '__currentTool', {
+    get: () => currentTool
+});
 import { updatePhysics, waveTime, totalInitialSprings } from './physics.js';
 import { HEAP, numPoints, numSprings, SPRINGS_OFFSET, POINTS_OFFSET, P_STRIDE, S_STRIDE, P_X, P_Y, P_HULL, P_WTR, S_BRK, S_P1, S_P2, S_DOOR, S_TENS, S_FATIGUE, S_DIAG, P_LEAK, P_PUMP, baseWaterLevel, SPACING, MAX_POINTS } from './ship.js';
 
@@ -67,10 +72,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let integrity = Math.max(0, Math.round((activeSprings / (totalInitialSprings||1)) * 100));
         let statusEl = document.getElementById('ship-status');
+        if(statusEl) {
 
         if (integrity < 30) { statusEl.innerText = "KRITISCHER SCHADEN!"; statusEl.className = "status status-danger"; }
         else if (integrity < 80) { statusEl.innerText = `Struktur warnt: ${integrity}%`; statusEl.className = "status status-danger"; }
         else { statusEl.innerText = `Intakt: ${integrity}%`; statusEl.className = "status status-ok"; }
+        }
 
         ctx.fillStyle = "rgba(14, 165, 233, 0.2)"; ctx.fillRect(0, baseWaterLevel, width, height);
 

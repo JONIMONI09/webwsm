@@ -49,7 +49,7 @@ globals.describe('updateRepairLogic', () => {
         globals.expect(ship.HEAP[p2 + P_WTR]).toBe(100);
     });
 
-    globals.it('repairs broken spring if ends are close enough', () => {
+    globals.it('repairs broken spring and sets fatigue to -120 for immunity', () => {
         const P_STRIDE = 11, S_STRIDE = 11;
         const SPRINGS_OFFSET = ship.MAX_POINTS * P_STRIDE;
         const P_X = 0, P_Y = 1, P_LEAK = 8;
@@ -78,76 +78,43 @@ globals.describe('updateRepairLogic', () => {
         input.updateRepairLogic();
 
         globals.expect(ship.HEAP[s + S_BRK]).toBe(0);
-        globals.expect(ship.HEAP[s + S_FATIGUE]).toBe(0);
+        globals.expect(ship.HEAP[s + S_FATIGUE]).toBe(-120.0);
         globals.expect(ship.HEAP[p1 + P_LEAK]).toBe(0);
         globals.expect(ship.HEAP[p2 + P_LEAK]).toBe(0);
     });
 
-    globals.it('pulls broken spring nodes together if they are far apart', () => {
+
+
+    globals.it('grants immunity and repairs immediately if spring is in radius, even if stretched', () => {
         const P_STRIDE = 11, S_STRIDE = 11;
         const SPRINGS_OFFSET = ship.MAX_POINTS * P_STRIDE;
         const P_X = 0, P_Y = 1, P_OX = 2, P_OY = 3;
-        const S_P1 = 0, S_P2 = 1, S_LEN = 2, S_BRK = 3;
-
-        input.pointer.x = 0;
-        input.pointer.y = 0;
-
-        const p1 = 0 * P_STRIDE;
-        ship.HEAP[p1 + P_X] = 0;
-        ship.HEAP[p1 + P_Y] = 0;
-        ship.HEAP[p1 + P_OX] = 0;
-
-        const p2 = 1 * P_STRIDE;
-        ship.HEAP[p2 + P_X] = 100;
-        ship.HEAP[p2 + P_Y] = 0;
-        ship.HEAP[p2 + P_OX] = 100;
-
-        const s = SPRINGS_OFFSET + 0 * S_STRIDE;
-        ship.HEAP[s + S_P1] = 0;
-        ship.HEAP[s + S_P2] = 1;
-        ship.HEAP[s + S_LEN] = 10; // rest length 10
-        ship.HEAP[s + S_BRK] = 1.0; // broken
-
-        input.updateRepairLogic();
-
-        // p2 is outside, p1 is inside. p2 should be pulled towards p1 by moveX*2
-        globals.expect(ship.HEAP[p2 + P_X]).toBeLessThan(100);
-        globals.expect(ship.HEAP[p2 + P_OX]).toBeLessThan(100);
-
-        globals.expect(ship.HEAP[p1 + P_X]).toBe(0);
-        globals.expect(ship.HEAP[p1 + P_OX]).toBe(0);
-
-        globals.expect(ship.HEAP[s + S_BRK]).toBe(1.0);
-    });
-
-    globals.it('pulls broken spring nodes together equally if both are inside radius but far apart', () => {
-        const P_STRIDE = 11, S_STRIDE = 11;
-        const SPRINGS_OFFSET = ship.MAX_POINTS * P_STRIDE;
-        const P_X = 0, P_Y = 1, P_OX = 2, P_OY = 3;
-        const S_P1 = 0, S_P2 = 1, S_LEN = 2, S_BRK = 3;
+        const S_P1 = 0, S_P2 = 1, S_LEN = 2, S_BRK = 3, S_FATIGUE = 8;
 
         input.pointer.x = 10;
         input.pointer.y = 0;
 
         const p1 = 0 * P_STRIDE;
-        ship.HEAP[p1 + P_X] = -5; // dist to 10 is 15 < radius(32.5)
+        ship.HEAP[p1 + P_X] = -5;
         ship.HEAP[p1 + P_Y] = 0;
         ship.HEAP[p1 + P_OX] = -5;
 
         const p2 = 1 * P_STRIDE;
-        ship.HEAP[p2 + P_X] = 25; // dist to 10 is 15 < radius(32.5)
+        ship.HEAP[p2 + P_X] = 25;
         ship.HEAP[p2 + P_Y] = 0;
         ship.HEAP[p2 + P_OX] = 25;
 
         const s = SPRINGS_OFFSET + 0 * S_STRIDE;
         ship.HEAP[s + S_P1] = 0;
         ship.HEAP[s + S_P2] = 1;
-        ship.HEAP[s + S_LEN] = 10; // dist 30 > rest*1.5(15)
+        ship.HEAP[s + S_LEN] = 10;
         ship.HEAP[s + S_BRK] = 1.0;
 
         input.updateRepairLogic();
 
-        globals.expect(ship.HEAP[p1 + P_X]).toBeGreaterThan(-5);
-        globals.expect(ship.HEAP[p2 + P_X]).toBeLessThan(25);
+        // Node position is now handled by physics solver, just check flags
+        globals.expect(ship.HEAP[s + S_BRK]).toBe(0.0);
+        globals.expect(ship.HEAP[s + S_FATIGUE]).toBe(-120.0);
     });
+
 });

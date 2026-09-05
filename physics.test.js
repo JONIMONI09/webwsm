@@ -45,3 +45,42 @@ test('Repair vector should pull nodes together diagonally', () => {
     const newDist = Math.sqrt(Math.pow(newX2 - newX1, 2) + Math.pow(newY2 - newY1, 2));
     expect(newDist).toBeCloseTo(5);
 });
+
+test('grants immunity to fatigue and break if fatigue is negative, and recovers over time', async () => {
+    global.window = { innerWidth: 1000, innerHeight: 1000 };
+    global.document = { getElementById: () => ({ classList: { toggle: () => {} }, style: {} }) };
+    const physics = await import('./physics.js');
+    const ship = await import('./ship.js');
+    const input = await import('./input.js');
+
+    ship.buildShip();
+
+        const p1 = ship.POINTS_OFFSET;
+        const p2 = ship.POINTS_OFFSET + ship.P_STRIDE;
+
+        ship.HEAP[p1 + ship.P_X] = 0;
+        ship.HEAP[p1 + ship.P_Y] = 0;
+
+        ship.HEAP[p2 + ship.P_X] = 100; // Massively stretched
+        ship.HEAP[p2 + ship.P_Y] = 0;
+
+        const s = ship.SPRINGS_OFFSET;
+        ship.HEAP[s + ship.S_P1] = 0;
+        ship.HEAP[s + ship.S_P2] = 1;
+        ship.HEAP[s + ship.S_LEN] = 10;
+        ship.HEAP[s + ship.S_BRK_THRESH] = 1.15;
+
+        // Negative fatigue grants immunity
+        ship.HEAP[s + ship.S_FATIGUE] = -120.0;
+        ship.HEAP[s + ship.S_BRK] = 0.0;
+
+        physics.updatePhysics(500);
+
+        // Not broken despite massive stretch
+        expect(ship.HEAP[s + ship.S_BRK]).toBe(0.0);
+
+        // Fatigue should step towards 0 by 1 per iteration, with 15 iterations per update
+        // We expect fatigue to increase, not jump to positive values.
+        expect(ship.HEAP[s + ship.S_FATIGUE]).toBeGreaterThan(-121.0);
+        expect(ship.HEAP[s + ship.S_FATIGUE]).toBeLessThan(0.0);
+});
