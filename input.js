@@ -158,10 +158,11 @@ export function updateRepairLogic() {
             let dist = Math.sqrt(dx*dx + dy*dy);
             let rest = HEAP[s + S_LEN];
 
-            if (dist > rest * 1.5) {
+            if (Math.abs(dist - rest) > rest * 0.1) {
                 let moveDist = (dist - rest) / 2;
-                let moveX = (dx / dist) * moveDist * repairPower;
-                let moveY = (dy / dist) * moveDist * repairPower;
+                let safeDist = dist === 0 ? 0.0001 : dist;
+                let moveX = (dx / safeDist) * moveDist * repairPower;
+                let moveY = (dy / safeDist) * moveDist * repairPower;
 
                 if (in1 && !in2) {
                     HEAP[p2+P_X] -= moveX * 2;
