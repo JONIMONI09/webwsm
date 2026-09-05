@@ -1,5 +1,5 @@
 import { HEAP, numPoints, numSprings, POINTS_OFFSET, SPRINGS_OFFSET, P_STRIDE, S_STRIDE, P_X, P_Y, P_OX, P_OY, P_MASS, P_WTR, P_BUOY, P_HULL, P_LEAK, P_PUMP, P_GRABBED, S_P1, S_P2, S_LEN, S_BRK, S_DOOR, S_TENS, S_DIAG, S_BRK_THRESH, S_FATIGUE, S_ODX, S_ODY, baseWaterLevel, SPACING } from './ship.js';
-import { currentTool, pointer, grabbedNodes, updateRepairLogic } from './input.js';
+import { pointer, grabbedNodes, updateRepairLogic } from './input.js';
 
 export let waveTime = 0;
 export let totalInitialSprings = 0;
@@ -29,7 +29,7 @@ export function updatePhysics(height) {
     let activeFatigueCount = 0;
 
     if (pointer.isDown) {
-        if (currentTool === 'grab' && grabbedNodes.length > 0) {
+        if (window.__currentTool === 'grab' && grabbedNodes.length > 0) {
             for (let g of grabbedNodes) {
                 let p = POINTS_OFFSET + g.id * P_STRIDE;
                 HEAP[p + P_X] += (pointer.x + g.ox - HEAP[p + P_X]) * 0.2;
@@ -37,16 +37,18 @@ export function updatePhysics(height) {
                 HEAP[p + P_OX] = HEAP[p + P_X]; HEAP[p + P_OY] = HEAP[p + P_Y];
             }
         }
-        else if (currentTool === 'repair') {
+        else if (window.__currentTool === 'repair') {
             updateRepairLogic();
         }
     }
 
+    let repairDamping = (pointer.isDown && window.__currentTool === 'repair') ? 0.5 : 1.0;
     for (let i = 0; i < numPoints; i++) {
         let p = POINTS_OFFSET + i * P_STRIDE;
         if (HEAP[p + P_GRABBED] > 0.5) continue;
 
-        let vx = HEAP[p + P_X] - HEAP[p + P_OX]; let vy = HEAP[p + P_Y] - HEAP[p + P_OY];
+        let vx = (HEAP[p + P_X] - HEAP[p + P_OX]) * repairDamping;
+        let vy = (HEAP[p + P_Y] - HEAP[p + P_OY]) * repairDamping;
         HEAP[p + P_OX] = HEAP[p + P_X]; HEAP[p + P_OY] = HEAP[p + P_Y];
 
         let wl = baseWaterLevel + Math.sin(HEAP[p + P_X] * 0.012 + waveTime) * 6;
@@ -120,16 +122,21 @@ export function updatePhysics(height) {
             let rest = HEAP[s + S_LEN]; let breakPoint = HEAP[s + S_BRK_THRESH];
             let stretch = dist / rest;
 
-            let yieldPoint = breakPoint * 0.97;
-            if (stretch > yieldPoint) {
-                HEAP[s + S_FATIGUE] += (stretch - yieldPoint) * 0.8;
-                if (iter === 0) activeFatigueCount++;
+            let isImmune = HEAP[s + S_FATIGUE] < 0;
+            if (isImmune) {
+                HEAP[s + S_FATIGUE] += 1.0; // recovery from immunity
             } else {
-                if (HEAP[s + S_FATIGUE] > 0.0) HEAP[s + S_FATIGUE] = Math.max(0.0, HEAP[s + S_FATIGUE] - 0.05);
-            }
+                let yieldPoint = breakPoint * 0.97;
+                if (stretch > yieldPoint) {
+                    HEAP[s + S_FATIGUE] += (stretch - yieldPoint) * 0.8;
+                    if (iter === 0) activeFatigueCount++;
+                } else {
+                    if (HEAP[s + S_FATIGUE] > 0.0) HEAP[s + S_FATIGUE] = Math.max(0.0, HEAP[s + S_FATIGUE] - 0.05);
+                }
 
-            if (stretch > breakPoint || dist < rest * CRUSH_THRESHOLD || HEAP[s + S_FATIGUE] > 1.0) {
-                breakSpring(s); continue;
+                if (stretch > breakPoint || dist < rest * CRUSH_THRESHOLD || HEAP[s + S_FATIGUE] > 1.0) {
+                    breakSpring(s); continue;
+                }
             }
 
             HEAP[s + S_TENS] = Math.min(1.0, Math.abs(rest - dist) / (rest * (breakPoint - 1)));

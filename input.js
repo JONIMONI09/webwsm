@@ -156,6 +156,7 @@ export function updateRepairLogic() {
 
         let dx1 = HEAP[p1+P_X] - pointer.x; let dy1 = HEAP[p1+P_Y] - pointer.y;
         let dx2 = HEAP[p2+P_X] - pointer.x; let dy2 = HEAP[p2+P_Y] - pointer.y;
+
         let in1 = Math.sqrt(dx1*dx1 + dy1*dy1) < repairRadius;
         let in2 = Math.sqrt(dx2*dx2 + dy2*dy2) < repairRadius;
 

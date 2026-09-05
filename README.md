@@ -1,6 +1,6 @@
 # WebWSM (Titan V26 Refactoring & Repair Logic Fix)
 
-A robust 2D physics engine simulating a ship using the HTML5 Canvas API and a custom point/spring constraint system. This project builds on the "Titan V26" physics logic, now refactored into a clean, modular setup using ES Modules (ESM) and Vite.
+A robust 2D physics engine simulating a ship using the HTML5 Canvas API and a custom point/spring constraint system. This project builds on the "Titan V26" physics logic, now refactored into a clean, modular setup using ES Modules (ESM) and Vite. Features advanced physics-based repair mechanics ensuring perfect structural integrity reconstruction.
 
 
 ## Overview
